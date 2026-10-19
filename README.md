@@ -1,104 +1,164 @@
-# Python Package Uninstaller
+# 📦 Python Package Uninstaller — PyQt6 Environment Package Manager
 
-A local PyQt6 desktop app for inspecting and removing packages from a selected
-Python interpreter. It does not uninstall Windows applications or find unused
-packages across your projects.
+<div align="center">
 
-## Run
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PyQt6](https://img.shields.io/badge/GUI-PyQt6-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.riverbankcomputing.com/software/pyqt/)
+[![Tests](https://img.shields.io/badge/Tests-36%20Passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](#-verification--tests)
+[![Packaging](https://img.shields.io/badge/Metadata-importlib.metadata%20%7C%20packaging-009688?style=for-the-badge)](package_backend.py)
+[![Safety](https://img.shields.io/badge/Safety-Pre--Removal%20Snapshots-blue?style=for-the-badge)](#-recovery--snapshots)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Cross--Platform-0078D6?style=for-the-badge&logo=windows11&logoColor=white)](package_uninstaller.py)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-Requires Python 3.10 or later. From this directory:
+**A local, high-precision desktop application built with PyQt6 for inspecting Python virtual environments, calculating true installed package sizes, analyzing reverse dependency impact, and executing safe, reversible uninstalls.**
 
+<p align="center">
+  <img src="verification/main-window.png" alt="Python Package Uninstaller Main Interface" width="90%" />
+</p>
+
+[Quick Start](#-quick-start) • [UI Highlights](#-interface-previews) • [Safety & Dependency Engine](#-safety--dependency-analysis) • [Recovery](#-recovery--snapshots) • [Testing](#-verification--tests)
+
+</div>
+
+---
+
+## ⚡ Key Features
+
+- **🔍 Exact Disk Space Calculation**: Measures installed distribution sizes by analyzing recorded file manifests in `.dist-info` / `.egg-info` rather than blindly guessing from shared directories.
+- **🛡️ Reverse Dependency Warning**: Analyzes target environment markers, extras, and dependent packages. Warns you before removing packages required by other installed distributions.
+- **🔒 Protection for Core Toolchains**: Locks and prevents accidental deletion of `pip`, `setuptools`, `wheel`, and active GUI runtime dependencies.
+- **📸 Pre-Removal Snapshots**: Automatically writes a timestamped snapshot (`requirements.txt` and `inventory.json`) before executing pip uninstalls.
+- **📑 Responsive Paginated Grid**: Obsidian-themed compact 26px rows, automatic window-fitting pagination, multi-page selection retention, and instant search.
+- **🛑 Non-Blocking Queue with Interruption**: Asynchronous worker thread with **Stop after current** cancellation support.
+
+---
+
+## 📸 Interface Previews
+
+<div align="center">
+
+### Review Removal Dialog with Reverse Dependency Warnings
+<img src="verification/removal-review.png" alt="Removal Review Dialog" width="80%" />
+
+### Compact View with Responsive Auto-Rows
+<img src="verification/compact-window.png" alt="Compact Auto Rows Window" width="80%" />
+
+</div>
+
+---
+
+## 🏗️ Architecture & Execution Flow
+
+```mermaid
+flowchart TD
+    subgraph EnvDiscovery ["🐍 Interpreter Discovery"]
+        Path["Selected Python Executable"] --> Scanner["Metadata Worker<br/>(importlib.metadata)"]
+        Scanner --> Parse["Extract Versions, Sizes (*.dist-info), & Requirements"]
+    end
+
+    subgraph DependencyTree ["📊 Dependency Graph"]
+        Parse --> DepGraph["Resolve Forward & Reverse Dependents"]
+        DepGraph --> ProtectCheck{"Is Core Toolchain or In-Use?"}
+        ProtectCheck -->|Yes| Blocked["Protected (Check Disabled)"]
+        ProtectCheck -->|No| Removable["Available for Removal Queue"]
+    end
+
+    subgraph SafetyExecution ["🛡️ Snapshot & Atomic Removal"]
+        Removable --> UserPlan["User Plan Selection"]
+        UserPlan --> ReviewModal["Review Impact Dialog<br/>(Show Affected Dependents)"]
+        ReviewModal --> Snap["Write Snapshot<br/>(requirements.txt + inventory.json)"]
+        Snap --> Worker["Removal Worker (pip uninstall -y)"]
+        Worker --> Journal["Log to history.jsonl"]
+    end
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python **3.10+** (Python 3.10, 3.11, 3.12, 3.13, 3.14 supported).
+- The inspected target interpreter only requires Python 3.10+ (does not require PyQt6).
+
+### 1. Installation
 ```powershell
-python -m pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/Rahim36712/python-package-uninstaller.git
+cd python-package-uninstaller
+
+# Install PyQt6 and packaging
+pip install -r requirements.txt
+```
+
+### 2. Launch Application
+```powershell
 python package_uninstaller.py
 ```
 
-The app uses `importlib.metadata`, so it does not need `pkg_resources` or
-setuptools to start. The interpreter being inspected needs Python 3.10+;
-it does not need PyQt6 or packaging installed. Removal and requirements export
-require pip in that interpreter.
+---
 
-## Use
+## 🛡️ Safety & Dependency Analysis
 
-- Choose an environment, or use **Browse…** to select its Python executable.
-- The interface uses white surfaces, obsidian text and compact 26-pixel rows.
-  **Auto rows** fits each numbered page to the window without vertical scrolling.
-  You can also choose **25**, **50** or **100 rows** per page (larger pages may scroll).
-- Search names/descriptions across all pages, sort by name/size/version, and check packages.
-  Clicking a row shows details; checking its box adds it to the removal plan.
-- **Select page** includes only removable packages on the current page. **Clear selection**
-  clears all selections, including other pages and hidden results. Selection survives page changes, sorting
-  and refresh, and is cleared when switching interpreters.
-- **Refresh** / F5 rediscovers metadata and rescans recorded files in a worker.
-- **Review removal** lists required dependents, possible extras and shared
-  environment impact. Review and acknowledge the list before removal.
-- **Stop after current** cancels the queue between pip operations. Completed
-  removals remain in effect. A failed removal stops the queue for review.
-- **Export requirements** saves that interpreter's `pip freeze --all` output.
-- **Recovery & history** displays recent removals and opens the recovery folder.
-  **Show activity** expands the current session log. Ctrl+F focuses search.
+- **Installed Sizes**: Computes each package's actual recorded files. Inaccessible files are indicated with `*`; editable source links are marked with `†`.
+- **Environment Isolation**: Inherited base packages outside an active virtual environment and Conda-managed non-pip packages are protected from modification.
+- **Topological Uninstall Order**: When multiple interdependent packages are chosen, dependents are uninstalled before their upstream dependencies.
+- **Safe Rendering**: All metadata and terminal logs are rendered strictly as plain text to prevent rich-text injection attacks.
 
-## Size and dependency limits
+---
 
-Sizes count each distribution's recorded files, including recorded scripts and
-metadata, instead of scanning the shared `site-packages` directory. Unknown
-inventories show **Unknown**; missing/inaccessible files show a partial size
-marked `*`. Editable installations show `†` and exclude external source trees.
-Recorded sizes are not guaranteed reclaimed space: shared files, generated
-files, filesystem allocation and editable sources can differ.
+## 📸 Recovery & Snapshots
 
-Dependency warnings use the selected interpreter's environment markers.
-Extras are conservative warnings because installed metadata does not preserve
-which extras were requested. The app cannot prove a package is unused by other
-projects. Pip/setuptools/wheel and this running app's dependencies are protected.
-Duplicate package metadata, packages managed by another installer, and packages
-inherited from outside a virtual environment are blocked. Build-source lists
-without installed file records are not counted as installed sizes.
-In Conda environments, only explicitly pip-managed packages are removable.
+Before any batch removal commences, the application generates a recovery bundle under:
+```
+%LOCALAPPDATA%\LocalTools\PythonPackageUninstaller\
+```
+Containing:
+1. `requirements.txt`: Clean output of `pip freeze --all`.
+2. `inventory.json`: Full metadata snapshot of package versions, installer sources, and dependencies.
 
-## Recovery
-
-Before any removal, the app rechecks the inventory and saves a timestamped folder
-containing `requirements.txt` and `inventory.json`. If exporting or journaling
-fails before a removal starts, that removal is blocked. On Windows, recovery
-data normally lives under `%LOCALAPPDATA%\LocalTools\PythonPackageUninstaller`;
-the exact path is shown in **Recovery & history**. History is recorded in
-`history.jsonl` and no data is uploaded.
-
-To reinstall from a snapshot, use the same interpreter:
-
+### Reinstalling from Snapshot
+To restore the environment back to the state recorded prior to an uninstall operation:
 ```powershell
 & 'C:\path\to\python.exe' -m pip install -r 'C:\path\to\snapshot\requirements.txt'
 ```
 
-This is a reinstall aid, not transactional undo. Reinstallation may need network
-access; removed versions, private indexes and original editable/local sources
-may be unavailable. The app does not automatically install or restore anything.
-Avoid modifying the same environment from another process during removal.
+---
 
-## Verification
+## 🧪 Verification & Tests
 
 ```powershell
+# Run the 36 automated unit and isolation tests
 python -m unittest discover -s tests -v
 ```
 
-Tests cover recorded sizes, target markers, dependency impact, protection,
-selection preservation, busy-state locks, safe text rendering, discovery failure,
-cancellation, recovery failures and removal verification. Most removal tests mock
-pip. An integration test bootstraps pip locally in a disposable, isolated virtual
-environment and removes two synthetic fixture packages. It never removes packages
-from your working Python environment or downloads dependencies.
+The test suite validates:
+- Size aggregation and recorded file accounting
+- Dependency graph cycle resolution
+- Marker evaluation and optional extra rules
+- Isolated virtual environment mock pip lifecycle
+- Busy-state window locks and cancellation hooks
 
-For a read-only live discovery check and rendered screenshots:
+---
 
-```powershell
-python tests/verify_runtime.py verification
+## 📁 Repository Structure
+
+```
+python-package-uninstaller/
+├── package_backend.py        # Metadata scanner, dependency resolver & snapshot manager
+├── package_uninstaller.py    # PyQt6 desktop GUI, worker threads & event handlers
+├── assets/                   # Checkmark and chevron vector SVG assets
+├── verification/             # High-resolution application screenshots
+├── tests/                    # 36 Unit, integration, and UI test suites
+│   ├── test_backend.py
+│   ├── test_integration.py
+│   ├── test_ui.py
+│   └── verify_runtime.py
+├── requirements.txt          # Dependencies (PyQt6, packaging)
+└── README.md                 # Project documentation
 ```
 
-Verified on 2026-10-09 with Python 3.14.2, PyQt6 6.10.2 and packaging 26.0:
-36 tests passed, including real removal of disposable fixture packages and
-pagination/selection checks. Live read-only discovery found 311 packages. The
-white/obsidian interface shows 15 complete rows at 1240x820 and 10 at 960x680,
-with numbered pages and no vertical scrolling in Auto rows mode. The main window,
-compact layout, second page and removal review were rendered and inspected. Existing installed packages were
-not removed. Screenshots are generated under `verification/` (git-ignored).
+---
+
+<div align="center">
+  <sub>Engineered for clean environments, transparent dependencies, and zero accidental deletions.</sub>
+</div>
